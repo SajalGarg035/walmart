@@ -3,8 +3,8 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './contexts/AuthContext';
 import { CartProvider } from './contexts/CartContext';
-
 import { SocketProvider } from './contexts/SocketContext';
+
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import Homepage from './pages/Homepage';
@@ -20,6 +20,7 @@ import RoomPage from './pages/RoomPage';
 import RoomDashboard from './pages/RoomDashboard';
 import CreateRoomPage from './pages/CreateRoomPage';
 import JoinRoomPage from './pages/JoinRoomPage';
+
 import './App.css';
 
 function App() {
@@ -50,13 +51,6 @@ function App() {
               <Footer />
               <Toaster position="top-right" />
             </div>
-          </Router>
-        </SocketProvider>
-      </CartProvider>
-              <Footer />
-              <Toaster position="top-right" />
-            </div>
-     </div>
           </Router>
         </SocketProvider>
       </CartProvider>
