@@ -1,23 +1,27 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { Product } from '../data/products';
 import toast from 'react-hot-toast';
 
-interface CartItem {
-  _id: string;
-  name: string;
-  price: number;
-  images: Array<{ url: string; alt: string }>;
+export interface CartItem {
+  product: Product;
   quantity: number;
-  stock: number;
+  selectedVariants?: {
+    size?: string;
+    color?: string;
+  };
 }
 
 interface CartContextType {
   items: CartItem[];
-  addToCart: (product: any, quantity?: number) => void;
+  addToCart: (product: Product, quantity?: number, variants?: { size?: string; color?: string }) => void;
   removeFromCart: (productId: string) => void;
   updateQuantity: (productId: string, quantity: number) => void;
   clearCart: () => void;
   getCartTotal: () => number;
   getCartCount: () => number;
+  getCartSubtotal: () => number;
+  getTax: () => number;
+  getShipping: () => number;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -34,30 +38,38 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [items, setItems] = useState<CartItem[]>([]);
 
   useEffect(() => {
-    const savedCart = localStorage.getItem('cart');
+    const savedCart = localStorage.getItem('walmart-cart');
     if (savedCart) {
-      setItems(JSON.parse(savedCart));
+      try {
+        setItems(JSON.parse(savedCart));
+      } catch (error) {
+        console.error('Error loading cart from localStorage:', error);
+      }
     }
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('cart', JSON.stringify(items));
+    localStorage.setItem('walmart-cart', JSON.stringify(items));
   }, [items]);
 
-  const addToCart = (product: any, quantity = 1) => {
+  const addToCart = (product: Product, quantity = 1, variants?: { size?: string; color?: string }) => {
     setItems(currentItems => {
-      const existingItem = currentItems.find(item => item._id === product._id);
+      const existingItemIndex = currentItems.findIndex(item => 
+        item.product.id === product.id &&
+        item.selectedVariants?.size === variants?.size &&
+        item.selectedVariants?.color === variants?.color
+      );
       
-      if (existingItem) {
-        const newQuantity = existingItem.quantity + quantity;
+      if (existingItemIndex > -1) {
+        const newQuantity = currentItems[existingItemIndex].quantity + quantity;
         if (newQuantity > product.stock) {
           toast.error('Not enough stock available');
           return currentItems;
         }
         
         toast.success('Quantity updated in cart');
-        return currentItems.map(item =>
-          item._id === product._id
+        return currentItems.map((item, index) =>
+          index === existingItemIndex
             ? { ...item, quantity: newQuantity }
             : item
         );
@@ -69,12 +81,9 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         toast.success('Product added to cart');
         return [...currentItems, {
-          _id: product._id,
-          name: product.name,
-          price: product.price,
-          images: product.images,
+          product,
           quantity,
-          stock: product.stock
+          selectedVariants: variants
         }];
       }
     });
@@ -82,7 +91,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const removeFromCart = (productId: string) => {
     setItems(currentItems => {
-      const newItems = currentItems.filter(item => item._id !== productId);
+      const newItems = currentItems.filter(item => item.product.id !== productId);
       toast.success('Product removed from cart');
       return newItems;
     });
@@ -96,8 +105,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     setItems(currentItems =>
       currentItems.map(item => {
-        if (item._id === productId) {
-          if (quantity > item.stock) {
+        if (item.product.id === productId) {
+          if (quantity > item.product.stock) {
             toast.error('Not enough stock available');
             return item;
           }
@@ -113,8 +122,21 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     toast.success('Cart cleared');
   };
 
+  const getCartSubtotal = () => {
+    return items.reduce((total, item) => total + (item.product.price * item.quantity), 0);
+  };
+
+  const getTax = () => {
+    return getCartSubtotal() * 0.08; // 8% tax
+  };
+
+  const getShipping = () => {
+    const subtotal = getCartSubtotal();
+    return subtotal > 35 ? 0 : 5.99; // Free shipping over $35
+  };
+
   const getCartTotal = () => {
-    return items.reduce((total, item) => total + (item.price * item.quantity), 0);
+    return getCartSubtotal() + getTax() + getShipping();
   };
 
   const getCartCount = () => {
@@ -129,7 +151,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updateQuantity,
       clearCart,
       getCartTotal,
-      getCartCount
+      getCartCount,
+      getCartSubtotal,
+      getTax,
+      getShipping
     }}>
       {children}
     </CartContext.Provider>
