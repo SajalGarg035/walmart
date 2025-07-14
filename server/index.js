@@ -103,13 +103,40 @@ io.on('connection', (socket) => {
     socket.to(roomId).emit('user-left', { userId });
   });
 
-  socket.on('cart-update', (data) => {
+  socket.on('cart-update', async (data) => {
     const { roomId, cart, userId } = data;
-    socket.to(roomId).emit('cart-updated', { cart, updatedBy: userId });
+    try {
+      // Update the room's shared cart in database
+      const Room = require('./models/Room');
+      const room = await Room.findById(roomId);
+      if (room) {
+        room.sharedCart = cart;
+        await room.save();
+        await room.populate('sharedCart.product sharedCart.addedBy', 'name price images username');
+        socket.to(roomId).emit('cart-updated', { cart: room.sharedCart, updatedBy: userId });
+      }
+    } catch (error) {
+      console.error('Error updating shared cart:', error);
+    }
   });
 
   socket.on('chat-message', (data) => {
     const { roomId, message, userId, username, timestamp } = data;
+    
+    // Save message to database
+    const Room = require('./models/Room');
+    Room.findById(roomId).then(room => {
+      if (room) {
+        room.chatHistory.push({
+          user: userId,
+          message,
+          timestamp: new Date(timestamp)
+        });
+        room.save();
+      }
+    }).catch(err => console.error('Error saving message:', err));
+    
+    // Broadcast message to all room participants
     io.to(roomId).emit('new-message', { message, userId, username, timestamp });
   });
 

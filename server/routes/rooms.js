@@ -1,5 +1,6 @@
 const express = require('express');
 const Room = require('../models/Room');
+const Product = require('../models/Product');
 const jwt = require('jsonwebtoken');
 const { nanoid } = require('nanoid');
 const router = express.Router();
@@ -52,7 +53,8 @@ router.post('/join', authenticate, async (req, res) => {
     const { code } = req.body;
     
     const room = await Room.findOne({ code, isActive: true })
-      .populate('creator participants.user', 'username firstName lastName avatar');
+      .populate('creator participants.user', 'username firstName lastName avatar')
+      .populate('sharedCart.product sharedCart.addedBy', 'name price images username');
 
     if (!room) {
       return res.status(404).json({ message: 'Room not found' });
@@ -84,7 +86,8 @@ router.get('/:id', authenticate, async (req, res) => {
   try {
     const room = await Room.findById(req.params.id)
       .populate('creator participants.user', 'username firstName lastName avatar')
-      .populate('sharedCart.product sharedCart.addedBy', 'name price images username');
+      .populate('sharedCart.product sharedCart.addedBy', 'name price images username')
+      .populate('chatHistory.user', 'username firstName lastName');
 
     if (!room) {
       return res.status(404).json({ message: 'Room not found' });
@@ -145,7 +148,11 @@ router.put('/:id/cart', authenticate, async (req, res) => {
       }
     } else if (action === 'update') {
       if (existingItemIndex > -1) {
-        room.sharedCart[existingItemIndex].quantity = quantity;
+        if (quantity <= 0) {
+          room.sharedCart.splice(existingItemIndex, 1);
+        } else {
+          room.sharedCart[existingItemIndex].quantity = quantity;
+        }
       }
     }
 
@@ -167,11 +174,34 @@ router.get('/user/my-rooms', authenticate, async (req, res) => {
       isActive: true
     })
     .populate('creator', 'username firstName lastName')
+    .populate('participants.user', 'username firstName lastName')
+    .populate('sharedCart.product', 'name price')
     .sort({ updatedAt: -1 });
 
     res.json(rooms);
   } catch (error) {
     console.error('Get user rooms error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Delete room (only creator can delete)
+router.delete('/:id', authenticate, async (req, res) => {
+  try {
+    const room = await Room.findById(req.params.id);
+    
+    if (!room) {
+      return res.status(404).json({ message: 'Room not found' });
+    }
+
+    if (room.creator.toString() !== req.userId) {
+      return res.status(403).json({ message: 'Only room creator can delete the room' });
+    }
+
+    await Room.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Room deleted successfully' });
+  } catch (error) {
+    console.error('Delete room error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });
