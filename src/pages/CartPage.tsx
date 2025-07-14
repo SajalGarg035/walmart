@@ -6,13 +6,9 @@ import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
 
 const CartPage: React.FC = () => {
-  const { items, removeFromCart, updateQuantity, getCartTotal, clearCart } = useCart();
+  const { items, removeFromCart, updateQuantity, clearCart, getCartSubtotal, getTax, getShipping, getCartTotal } = useCart();
   const { user } = useAuth();
   const navigate = useNavigate();
-
-  const shipping = 5.99;
-  const tax = getCartTotal() * 0.08;
-  const total = getCartTotal() + shipping + tax;
 
   const handleCheckout = () => {
     if (!user) {
@@ -68,31 +64,38 @@ const CartPage: React.FC = () => {
                 <div className="space-y-4">
                   {items.map((item) => (
                     <motion.div
-                      key={item._id}
+                      key={`${item.product.id}-${item.selectedVariants?.size || ''}-${item.selectedVariants?.color || ''}`}
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -20 }}
                       className="flex items-center space-x-4 p-4 border border-gray-200 rounded-lg"
                     >
                       <img
-                        src={item.images[0]?.url}
-                        alt={item.images[0]?.alt}
+                        src={item.product.imageUrl}
+                        alt={item.product.name}
                         className="w-16 h-16 object-cover rounded-md"
                       />
                       
                       <div className="flex-1">
-                        <h3 className="font-medium text-gray-900">{item.name}</h3>
+                        <h3 className="font-medium text-gray-900">{item.product.name}</h3>
                         <p className="text-sm text-gray-600">
-                          ${item.price.toFixed(2)} each
+                          ${item.product.price.toFixed(2)} each
                         </p>
+                        {item.selectedVariants && (
+                          <div className="text-sm text-gray-500">
+                            {item.selectedVariants.size && <span>Size: {item.selectedVariants.size}</span>}
+                            {item.selectedVariants.size && item.selectedVariants.color && <span> • </span>}
+                            {item.selectedVariants.color && <span>Color: {item.selectedVariants.color}</span>}
+                          </div>
+                        )}
                         <p className="text-sm text-gray-500">
-                          {item.stock > 0 ? `${item.stock} in stock` : 'Out of stock'}
+                          {item.product.stock > 0 ? `${item.product.stock} in stock` : 'Out of stock'}
                         </p>
                       </div>
                       
                       <div className="flex items-center space-x-2">
                         <button
-                          onClick={() => updateQuantity(item._id, item.quantity - 1)}
+                          onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
                           disabled={item.quantity <= 1}
                           className="p-1 border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
@@ -102,8 +105,8 @@ const CartPage: React.FC = () => {
                           {item.quantity}
                         </span>
                         <button
-                          onClick={() => updateQuantity(item._id, item.quantity + 1)}
-                          disabled={item.quantity >= item.stock}
+                          onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
+                          disabled={item.quantity >= item.product.stock}
                           className="p-1 border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <Plus className="h-4 w-4" />
@@ -112,10 +115,10 @@ const CartPage: React.FC = () => {
                       
                       <div className="text-right">
                         <p className="font-semibold text-gray-900">
-                          ${(item.price * item.quantity).toFixed(2)}
+                          ${(item.product.price * item.quantity).toFixed(2)}
                         </p>
                         <button
-                          onClick={() => removeFromCart(item._id)}
+                          onClick={() => removeFromCart(item.product.id)}
                           className="text-red-600 hover:text-red-800 text-sm mt-1"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -136,21 +139,21 @@ const CartPage: React.FC = () => {
               <div className="space-y-3">
                 <div className="flex justify-between">
                   <span className="text-gray-600">Subtotal</span>
-                  <span className="font-medium">${getCartTotal().toFixed(2)}</span>
+                  <span className="font-medium">${getCartSubtotal().toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Shipping</span>
-                  <span className="font-medium">${shipping.toFixed(2)}</span>
+                  <span className="font-medium">${getShipping().toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Tax</span>
-                  <span className="font-medium">${tax.toFixed(2)}</span>
+                  <span className="font-medium">${getTax().toFixed(2)}</span>
                 </div>
                 <div className="border-t pt-3">
                   <div className="flex justify-between">
                     <span className="text-lg font-semibold text-gray-900">Total</span>
                     <span className="text-lg font-semibold text-gray-900">
-                      ${total.toFixed(2)}
+                      ${getCartTotal().toFixed(2)}
                     </span>
                   </div>
                 </div>

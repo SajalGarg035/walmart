@@ -4,7 +4,6 @@ import { motion } from 'framer-motion';
 import { CreditCard, MapPin, Truck, Lock } from 'lucide-react';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
-import axios from 'axios';
 import toast from 'react-hot-toast';
 
 const CheckoutPage: React.FC = () => {
@@ -38,32 +37,12 @@ const CheckoutPage: React.FC = () => {
     setLoading(true);
 
     try {
-      // Create order
-      const orderData = {
-        items: items.map(item => ({
-          product: item._id,
-          quantity: item.quantity,
-          price: item.price,
-          total: item.price * item.quantity,
-        })),
-        shippingAddress,
-        paymentMethod: {
-          last4: paymentMethod.cardNumber.slice(-4),
-          brand: 'Visa', // In real app, detect card type
-        },
-        subtotal: getCartTotal(),
-        tax,
-        shipping,
-        total,
-      };
-
-      const response = await axios.post('http://localhost:3001/api/orders', orderData);
+      // Simulate order processing
+      await new Promise(resolve => setTimeout(resolve, 2000));
       
-      if (response.data) {
-        clearCart();
-        toast.success('Order placed successfully!');
-        navigate(`/orders`);
-      }
+      clearCart();
+      toast.success('Order placed successfully!');
+      navigate('/orders');
     } catch (error) {
       console.error('Checkout error:', error);
       toast.error('Failed to place order. Please try again.');
@@ -354,9 +333,9 @@ const CheckoutPage: React.FC = () => {
                       <h3 className="text-sm font-medium text-gray-900 mb-2">Order Items</h3>
                       <div className="space-y-2">
                         {items.map((item) => (
-                          <div key={item._id} className="flex justify-between text-sm">
-                            <span>{item.name} × {item.quantity}</span>
-                            <span>${(item.price * item.quantity).toFixed(2)}</span>
+                          <div key={item.product.id} className="flex justify-between text-sm">
+                            <span>{item.product.name} × {item.quantity}</span>
+                            <span>${(item.product.price * item.quantity).toFixed(2)}</span>
                           </div>
                         ))}
                       </div>
@@ -391,18 +370,18 @@ const CheckoutPage: React.FC = () => {
               
               <div className="space-y-4">
                 {items.map((item) => (
-                  <div key={item._id} className="flex items-center space-x-3">
+                  <div key={item.product.id} className="flex items-center space-x-3">
                     <img
-                      src={item.images[0]?.url}
-                      alt={item.images[0]?.alt}
+                      src={item.product.imageUrl}
+                      alt={item.product.name}
                       className="w-12 h-12 object-cover rounded-md"
                     />
                     <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-900">{item.name}</p>
+                      <p className="text-sm font-medium text-gray-900">{item.product.name}</p>
                       <p className="text-sm text-gray-600">Qty: {item.quantity}</p>
                     </div>
                     <span className="text-sm font-medium text-gray-900">
-                      ${(item.price * item.quantity).toFixed(2)}
+                      ${(item.product.price * item.quantity).toFixed(2)}
                     </span>
                   </div>
                 ))}

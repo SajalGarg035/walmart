@@ -2,19 +2,18 @@ import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Filter, Grid, List, ChevronDown } from 'lucide-react';
-import axios from 'axios';
+import { products, categories, searchProducts, getProductsByCategory, Product } from '../data/products';
 import ProductCard from '../components/ProductCard';
 
 const ProductsPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [totalPages, setTotalPages] = useState(1);
+  const [filteredProducts, setFilteredProducts] = useState<Product[]>(products);
+  const [loading, setLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [showFilters, setShowFilters] = useState(false);
   const [viewMode, setViewMode] = useState('grid');
-  const [sortBy, setSortBy] = useState('createdAt');
-  const [sortOrder, setSortOrder] = useState('desc');
+  const [sortBy, setSortBy] = useState('name');
+  const [sortOrder, setSortOrder] = useState('asc');
 
   const [filters, setFilters] = useState({
     category: searchParams.get('category') || '',
@@ -22,49 +21,93 @@ const ProductsPage: React.FC = () => {
     minPrice: searchParams.get('minPrice') || '',
     maxPrice: searchParams.get('maxPrice') || '',
     brand: searchParams.get('brand') || '',
+    onSale: searchParams.get('onSale') === 'true',
   });
 
+  const productsPerPage = 12;
+  const totalPages = Math.ceil(filteredProducts.length / productsPerPage);
+  const startIndex = (currentPage - 1) * productsPerPage;
+  const endIndex = startIndex + productsPerPage;
+  const currentProducts = filteredProducts.slice(startIndex, endIndex);
+
   useEffect(() => {
-    fetchProducts();
-  }, [searchParams, currentPage, sortBy, sortOrder]);
+    applyFilters();
+  }, [filters, sortBy, sortOrder]);
 
-  const fetchProducts = async () => {
-    try {
-      setLoading(true);
-      const params = new URLSearchParams();
-      
-      params.append('page', currentPage.toString());
-      params.append('limit', '12');
-      params.append('sort', sortBy);
-      params.append('order', sortOrder);
-      
-      if (filters.category) params.append('category', filters.category);
-      if (filters.search) params.append('search', filters.search);
-      if (filters.minPrice) params.append('minPrice', filters.minPrice);
-      if (filters.maxPrice) params.append('maxPrice', filters.maxPrice);
-      if (filters.brand) params.append('brand', filters.brand);
+  const applyFilters = () => {
+    setLoading(true);
+    let result = [...products];
 
-      const response = await axios.get(`http://localhost:3001/api/products?${params}`);
-      setProducts(response.data.products);
-      setTotalPages(response.data.totalPages);
-    } catch (error) {
-      console.error('Error fetching products:', error);
-    } finally {
-      setLoading(false);
+    // Apply search filter
+    if (filters.search) {
+      result = searchProducts(filters.search);
     }
+
+    // Apply category filter
+    if (filters.category) {
+      result = result.filter(product => product.category === filters.category);
+    }
+
+    // Apply price range filter
+    if (filters.minPrice) {
+      result = result.filter(product => product.price >= parseFloat(filters.minPrice));
+    }
+    if (filters.maxPrice) {
+      result = result.filter(product => product.price <= parseFloat(filters.maxPrice));
+    }
+
+    // Apply brand filter
+    if (filters.brand) {
+      result = result.filter(product => product.brand.toLowerCase() === filters.brand.toLowerCase());
+    }
+
+    // Apply on sale filter
+    if (filters.onSale) {
+      result = result.filter(product => product.isOnSale);
+    }
+
+    // Apply sorting
+    result.sort((a, b) => {
+      let aValue, bValue;
+      
+      switch (sortBy) {
+        case 'price':
+          aValue = a.price;
+          bValue = b.price;
+          break;
+        case 'rating':
+          aValue = a.rating;
+          bValue = b.rating;
+          break;
+        case 'name':
+        default:
+          aValue = a.name.toLowerCase();
+          bValue = b.name.toLowerCase();
+          break;
+      }
+
+      if (sortOrder === 'desc') {
+        return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
+      } else {
+        return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
+      }
+    });
+
+    setFilteredProducts(result);
+    setCurrentPage(1);
+    setLoading(false);
   };
 
-  const handleFilterChange = (key: string, value: string) => {
+  const handleFilterChange = (key: string, value: string | boolean) => {
     const newFilters = { ...filters, [key]: value };
     setFilters(newFilters);
     
     const newSearchParams = new URLSearchParams();
     Object.entries(newFilters).forEach(([k, v]) => {
-      if (v) newSearchParams.set(k, v);
+      if (v && v !== false) newSearchParams.set(k, v.toString());
     });
     
     setSearchParams(newSearchParams);
-    setCurrentPage(1);
   };
 
   const clearFilters = () => {
@@ -74,33 +117,12 @@ const ProductsPage: React.FC = () => {
       minPrice: '',
       maxPrice: '',
       brand: '',
+      onSale: false,
     });
     setSearchParams(new URLSearchParams());
-    setCurrentPage(1);
   };
 
-  const categories = [
-    'electronics',
-    'clothing',
-    'home',
-    'sports',
-    'beauty',
-    'toys',
-    'grocery',
-    'automotive'
-  ];
-
-  const brands = [
-    'Apple',
-    'Samsung',
-    'Nike',
-    'Adidas',
-    'Sony',
-    'LG',
-    'KitchenAid',
-    'Dyson',
-    'Levi\'s'
-  ];
+  const brands = [...new Set(products.map(p => p.brand))].sort();
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -109,11 +131,11 @@ const ProductsPage: React.FC = () => {
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">
-              {filters.category ? `${filters.category.charAt(0).toUpperCase() + filters.category.slice(1)} Products` : 'All Products'}
+              {filters.category ? `${categories.find(c => c.id === filters.category)?.name || filters.category} Products` : 'All Products'}
             </h1>
             {filters.search && (
               <p className="text-gray-600 mt-2">
-                Search results for "{filters.search}"
+                Search results for "{filters.search}" ({filteredProducts.length} products)
               </p>
             )}
           </div>
@@ -130,7 +152,8 @@ const ProductsPage: React.FC = () => {
                 }}
                 className="appearance-none bg-white border border-gray-300 rounded-md px-4 py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="createdAt-desc">Newest First</option>
+                <option value="name-asc">Name: A to Z</option>
+                <option value="name-desc">Name: Z to A</option>
                 <option value="price-asc">Price: Low to High</option>
                 <option value="price-desc">Price: High to Low</option>
                 <option value="rating-desc">Best Rated</option>
@@ -184,16 +207,16 @@ const ProductsPage: React.FC = () => {
                 <h3 className="text-sm font-medium text-gray-900 mb-3">Category</h3>
                 <div className="space-y-2">
                   {categories.map((category) => (
-                    <label key={category} className="flex items-center">
+                    <label key={category.id} className="flex items-center">
                       <input
                         type="radio"
                         name="category"
-                        value={category}
-                        checked={filters.category === category}
+                        value={category.id}
+                        checked={filters.category === category.id}
                         onChange={(e) => handleFilterChange('category', e.target.value)}
                         className="mr-2 text-blue-600"
                       />
-                      <span className="text-sm capitalize">{category}</span>
+                      <span className="text-sm">{category.name}</span>
                     </label>
                   ))}
                 </div>
@@ -239,6 +262,19 @@ const ProductsPage: React.FC = () => {
                   ))}
                 </div>
               </div>
+
+              {/* On Sale Filter */}
+              <div className="mb-6">
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={filters.onSale}
+                    onChange={(e) => handleFilterChange('onSale', e.target.checked)}
+                    className="mr-2 text-blue-600"
+                  />
+                  <span className="text-sm font-medium text-gray-900">On Sale</span>
+                </label>
+              </div>
             </div>
           </div>
 
@@ -254,15 +290,21 @@ const ProductsPage: React.FC = () => {
                   </div>
                 ))}
               </div>
-            ) : products.length === 0 ? (
+            ) : filteredProducts.length === 0 ? (
               <div className="text-center py-12">
                 <p className="text-gray-500 text-lg">No products found</p>
+                <button
+                  onClick={clearFilters}
+                  className="mt-4 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+                >
+                  Clear Filters
+                </button>
               </div>
             ) : (
               <>
                 <div className={`grid ${viewMode === 'grid' ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1'} gap-6`}>
-                  {products.map((product) => (
-                    <ProductCard key={product._id} product={product} />
+                  {currentProducts.map((product) => (
+                    <ProductCard key={product.id} product={product} />
                   ))}
                 </div>
 

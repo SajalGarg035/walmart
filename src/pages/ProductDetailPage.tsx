@@ -11,52 +11,62 @@ import {
   ArrowLeft,
   Truck,
   Shield,
-  RefreshCw
+  RefreshCw,
+  ZoomIn
 } from 'lucide-react';
-import axios from 'axios';
+import { getProductById, getProductsByCategory, Product } from '../data/products';
 import { useCart } from '../contexts/CartContext';
-import { useAuth } from '../contexts/AuthContext';
+import ProductCard from '../components/ProductCard';
 import toast from 'react-hot-toast';
 
 const ProductDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { addToCart } = useCart();
-  const { user } = useAuth();
-  const [product, setProduct] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [product, setProduct] = useState<Product | null>(null);
+  const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
   const [selectedImage, setSelectedImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
+  const [selectedVariants, setSelectedVariants] = useState<{ size?: string; color?: string }>({});
   const [activeTab, setActiveTab] = useState('description');
+  const [isZoomed, setIsZoomed] = useState(false);
 
   useEffect(() => {
     if (id) {
-      fetchProduct();
+      const foundProduct = getProductById(id);
+      if (foundProduct) {
+        setProduct(foundProduct);
+        // Get related products from the same category
+        const related = getProductsByCategory(foundProduct.category)
+          .filter(p => p.id !== foundProduct.id)
+          .slice(0, 4);
+        setRelatedProducts(related);
+      } else {
+        toast.error('Product not found');
+        navigate('/products');
+      }
     }
-  }, [id]);
-
-  const fetchProduct = async () => {
-    try {
-      setLoading(true);
-      const response = await axios.get(`http://localhost:3001/api/products/${id}`);
-      setProduct(response.data);
-    } catch (error) {
-      console.error('Error fetching product:', error);
-      toast.error('Product not found');
-      navigate('/products');
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [id, navigate]);
 
   const handleAddToCart = () => {
     if (!product) return;
-    addToCart(product, quantity);
+    
+    // Check if variants are required and selected
+    if (product.variants?.size && !selectedVariants.size) {
+      toast.error('Please select a size');
+      return;
+    }
+    if (product.variants?.color && !selectedVariants.color) {
+      toast.error('Please select a color');
+      return;
+    }
+    
+    addToCart(product, quantity, selectedVariants);
   };
 
   const handleQuantityChange = (change: number) => {
     const newQuantity = quantity + change;
-    if (newQuantity >= 1 && newQuantity <= product.stock) {
+    if (newQuantity >= 1 && newQuantity <= product!.stock) {
       setQuantity(newQuantity);
     }
   };
@@ -64,8 +74,8 @@ const ProductDetailPage: React.FC = () => {
   const handleShare = async () => {
     try {
       await navigator.share({
-        title: product.name,
-        text: product.description,
+        title: product!.name,
+        text: product!.description,
         url: window.location.href,
       });
     } catch (error) {
@@ -75,26 +85,10 @@ const ProductDetailPage: React.FC = () => {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500"></div>
-      </div>
-    );
-  }
-
   if (!product) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">Product not found</h1>
-          <button
-            onClick={() => navigate('/products')}
-            className="text-blue-600 hover:text-blue-800"
-          >
-            Back to Products
-          </button>
-        </div>
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500"></div>
       </div>
     );
   }
@@ -120,21 +114,28 @@ const ProductDetailPage: React.FC = () => {
               className="relative"
             >
               <img
-                src={product.images[selectedImage]?.url}
-                alt={product.images[selectedImage]?.alt}
-                className="w-full h-96 object-cover rounded-lg"
+                src={product.images[selectedImage] || product.imageUrl}
+                alt={product.name}
+                className={`w-full h-96 object-cover rounded-lg cursor-zoom-in ${isZoomed ? 'scale-150' : ''} transition-transform duration-300`}
+                onClick={() => setIsZoomed(!isZoomed)}
               />
-              {product.discount && (
+              {product.isOnSale && product.originalPrice && (
                 <div className="absolute top-4 left-4 bg-red-500 text-white px-3 py-1 rounded-md font-semibold">
-                  -{product.discount}% OFF
+                  -{Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)}% OFF
                 </div>
               )}
+              <button
+                onClick={() => setIsZoomed(!isZoomed)}
+                className="absolute top-4 right-4 bg-white p-2 rounded-full shadow-md hover:bg-gray-100"
+              >
+                <ZoomIn className="h-4 w-4" />
+              </button>
             </motion.div>
 
             {/* Thumbnail Images */}
             {product.images.length > 1 && (
               <div className="flex space-x-2 overflow-x-auto">
-                {product.images.map((image: any, index: number) => (
+                {product.images.map((image, index) => (
                   <button
                     key={index}
                     onClick={() => setSelectedImage(index)}
@@ -143,8 +144,8 @@ const ProductDetailPage: React.FC = () => {
                     }`}
                   >
                     <img
-                      src={image.url}
-                      alt={image.alt}
+                      src={image}
+                      alt={`${product.name} ${index + 1}`}
                       className="w-full h-full object-cover"
                     />
                   </button>
@@ -166,7 +167,7 @@ const ProductDetailPage: React.FC = () => {
                     <Star
                       key={i}
                       className={`h-5 w-5 ${
-                        i < Math.floor(product.rating.average)
+                        i < Math.floor(product.rating)
                           ? 'text-yellow-400 fill-current'
                           : 'text-gray-300'
                       }`}
@@ -174,7 +175,7 @@ const ProductDetailPage: React.FC = () => {
                   ))}
                 </div>
                 <span className="text-sm text-gray-600">
-                  {product.rating.average.toFixed(1)} ({product.rating.count} reviews)
+                  {product.rating.toFixed(1)} ({product.reviewCount} reviews)
                 </span>
               </div>
 
@@ -200,6 +201,53 @@ const ProductDetailPage: React.FC = () => {
                   <p className="text-red-600 font-semibold">Out of Stock</p>
                 )}
               </div>
+
+              {/* Variants */}
+              {product.variants && (
+                <div className="space-y-4 mb-6">
+                  {product.variants.size && (
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-900 mb-2">Size</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {product.variants.size.map((size) => (
+                          <button
+                            key={size}
+                            onClick={() => setSelectedVariants({...selectedVariants, size})}
+                            className={`px-3 py-2 border rounded-md ${
+                              selectedVariants.size === size
+                                ? 'border-blue-500 bg-blue-50 text-blue-600'
+                                : 'border-gray-300 hover:border-gray-400'
+                            }`}
+                          >
+                            {size}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {product.variants.color && (
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-900 mb-2">Color</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {product.variants.color.map((color) => (
+                          <button
+                            key={color}
+                            onClick={() => setSelectedVariants({...selectedVariants, color})}
+                            className={`px-3 py-2 border rounded-md ${
+                              selectedVariants.color === color
+                                ? 'border-blue-500 bg-blue-50 text-blue-600'
+                                : 'border-gray-300 hover:border-gray-400'
+                            }`}
+                          >
+                            {color}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Quantity Selector */}
               <div className="flex items-center space-x-4 mb-6">
@@ -271,7 +319,7 @@ const ProductDetailPage: React.FC = () => {
         <div className="mt-16">
           <div className="border-b border-gray-200">
             <nav className="flex space-x-8">
-              {['description', 'specifications', 'reviews'].map((tab) => (
+              {['description', 'specifications', 'features'].map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
@@ -290,56 +338,45 @@ const ProductDetailPage: React.FC = () => {
           <div className="mt-8">
             {activeTab === 'description' && (
               <div className="prose max-w-none">
-                <p className="text-gray-700 leading-relaxed">{product.description}</p>
+                <p className="text-gray-700 leading-relaxed">{product.longDescription}</p>
               </div>
             )}
 
             {activeTab === 'specifications' && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {product.specifications.map((spec: any, index: number) => (
-                  <div key={index} className="flex justify-between py-2 border-b border-gray-200">
-                    <span className="font-medium text-gray-700">{spec.key}:</span>
-                    <span className="text-gray-600">{spec.value}</span>
+                {Object.entries(product.specifications).map(([key, value]) => (
+                  <div key={key} className="flex justify-between py-2 border-b border-gray-200">
+                    <span className="font-medium text-gray-700">{key}:</span>
+                    <span className="text-gray-600">{value}</span>
                   </div>
                 ))}
               </div>
             )}
 
-            {activeTab === 'reviews' && (
-              <div className="space-y-6">
-                {product.reviews.length === 0 ? (
-                  <p className="text-gray-500">No reviews yet. Be the first to review!</p>
-                ) : (
-                  product.reviews.map((review: any, index: number) => (
-                    <div key={index} className="border-b border-gray-200 pb-6">
-                      <div className="flex items-center space-x-4 mb-2">
-                        <span className="font-medium text-gray-900">
-                          {review.user.firstName} {review.user.lastName}
-                        </span>
-                        <div className="flex items-center">
-                          {[...Array(5)].map((_, i) => (
-                            <Star
-                              key={i}
-                              className={`h-4 w-4 ${
-                                i < review.rating
-                                  ? 'text-yellow-400 fill-current'
-                                  : 'text-gray-300'
-                              }`}
-                            />
-                          ))}
-                        </div>
-                        <span className="text-sm text-gray-500">
-                          {new Date(review.date).toLocaleDateString()}
-                        </span>
-                      </div>
-                      <p className="text-gray-700">{review.comment}</p>
-                    </div>
-                  ))
-                )}
+            {activeTab === 'features' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {product.features.map((feature, index) => (
+                  <div key={index} className="flex items-center space-x-2">
+                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                    <span className="text-gray-700">{feature}</span>
+                  </div>
+                ))}
               </div>
             )}
           </div>
         </div>
+
+        {/* Related Products */}
+        {relatedProducts.length > 0 && (
+          <div className="mt-16">
+            <h2 className="text-2xl font-bold text-gray-900 mb-8">Related Products</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {relatedProducts.map((relatedProduct) => (
+                <ProductCard key={relatedProduct.id} product={relatedProduct} />
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

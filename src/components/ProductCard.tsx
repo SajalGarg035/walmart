@@ -2,21 +2,8 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ShoppingCart, Star, Heart } from 'lucide-react';
+import { Product } from '../data/products';
 import { useCart } from '../contexts/CartContext';
-
-interface Product {
-  _id: string;
-  name: string;
-  price: number;
-  originalPrice?: number;
-  images: Array<{ url: string; alt: string }>;
-  rating: {
-    average: number;
-    count: number;
-  };
-  discount?: number;
-  stock: number;
-}
 
 interface ProductCardProps {
   product: Product;
@@ -37,16 +24,16 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, className = '' }) =>
       whileHover={{ y: -5 }}
       className={`bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow ${className}`}
     >
-      <Link to={`/products/${product._id}`}>
+      <Link to={`/products/${product.id}`}>
         <div className="relative">
           <img
-            src={product.images[0]?.url}
-            alt={product.images[0]?.alt}
+            src={product.imageUrl}
+            alt={product.name}
             className="w-full h-48 object-cover"
           />
-          {product.discount && (
+          {product.isOnSale && product.originalPrice && (
             <div className="absolute top-2 left-2 bg-red-500 text-white px-2 py-1 rounded-md text-sm font-semibold">
-              -{product.discount}%
+              -{Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)}%
             </div>
           )}
           <button className="absolute top-2 right-2 p-1 bg-white rounded-full shadow-md hover:bg-gray-100 transition-colors">
@@ -65,7 +52,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, className = '' }) =>
                 <Star
                   key={i}
                   className={`h-4 w-4 ${
-                    i < Math.floor(product.rating.average)
+                    i < Math.floor(product.rating)
                       ? 'text-yellow-400 fill-current'
                       : 'text-gray-300'
                   }`}
@@ -73,7 +60,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, className = '' }) =>
               ))}
             </div>
             <span className="text-sm text-gray-600 ml-2">
-              ({product.rating.count})
+              ({product.reviewCount})
             </span>
           </div>
           

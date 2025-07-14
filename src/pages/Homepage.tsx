@@ -5,29 +5,14 @@ import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
 import { motion } from "framer-motion"
 import { ArrowRight, Truck, Shield, RefreshCw, Users, Search, ShoppingCart, User, MapPin, Menu } from "lucide-react"
-import axios from "axios"
+import { getFeaturedProducts } from "../data/products"
 import ProductCard from "../components/ProductCard"
 import { useAuth } from "../contexts/AuthContext"
 
 const Homepage: React.FC = () => {
-  const [featuredProducts, setFeaturedProducts] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [featuredProducts, setFeaturedProducts] = useState(getFeaturedProducts())
+  const [loading, setLoading] = useState(false)
   const { user } = useAuth()
-
-  useEffect(() => {
-    fetchFeaturedProducts()
-  }, [])
-
-  const fetchFeaturedProducts = async () => {
-    try {
-      const response = await axios.get("http://localhost:3001/api/products/featured")
-      setFeaturedProducts(response.data)
-    } catch (error) {
-      console.error("Error fetching featured products:", error)
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const features = [
     {
@@ -284,7 +269,7 @@ const Homepage: React.FC = () => {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {featuredProducts.map((product) => (
-                <ProductCard key={product._id} product={product} />
+                <ProductCard key={product.id} product={product} />
               ))}
             </div>
           )}
