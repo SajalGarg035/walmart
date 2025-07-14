@@ -56,6 +56,7 @@ function App() {
               <Footer />
               <Toaster position="top-right" />
             </div>
+     </div>
           </Router>
         </SocketProvider>
       </CartProvider>
