@@ -173,14 +173,16 @@ const Navbar: React.FC = () => {
               <Link to="/cart" className="flex items-center space-x-2 hover:text-yellow-300 transition-colors relative">
                 <ShoppingCart className="h-4 w-4" />
                 <div className="flex flex-col items-start">
-                  <span className="text-xs leading-none">${getCartTotal ? getCartTotal().toFixed(2) : "0.00"}</span>
+                  <span className="text-xs leading-none">
+                    ${getCartTotal ? getCartTotal().toFixed(2) : "0.00"}
+                  </span>
                   <span className="text-xs leading-none opacity-75">
-                    {getCartCount()} {getCartCount() === 1 ? "item" : "items"}
+                    {getCartCount ? getCartCount() : 0} {(getCartCount ? getCartCount() : 0) === 1 ? "item" : "items"}
                   </span>
                 </div>
-                {getCartCount() > 0 && (
+                {(getCartCount ? getCartCount() : 0) > 0 && (
                   <span className="absolute -top-1 -right-1 bg-yellow-400 text-blue-900 text-xs rounded-full h-4 w-4 flex items-center justify-center font-bold">
-                    {getCartCount()}
+                    {getCartCount ? getCartCount() : 0}
                   </span>
                 )}
               </Link>
@@ -194,11 +196,14 @@ const Navbar: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-8 w-full">
-              {/* Logo */}
               <Link to="/" className="flex items-center space-x-2 flex-shrink-0">
-                <div className="bg-yellow-400 text-blue-900 px-2 py-1 rounded font-bold text-lg">★</div>
-                <span className="text-2xl font-bold text-white">Walmart</span>
-              </Link>
+  <img
+    src="https://th.bing.com/th/id/R.cba9989d9a166fd0b5d6ccc2c6e1e0f4?rik=uszVEE8zXTWMiw&riu=http%3a%2f%2f1000logos.net%2fwp-content%2fuploads%2f2017%2f05%2fEmblem-Walmart.jpg&ehk=uYehZzXhw1a4kdy%2budI%2f8jlOhYVTg7BvqpZMdsw%2fRAo%3d&risl=&pid=ImgRaw&r=0"
+    alt="Walmart spark icon"
+    className="h-20 w-40"
+  />
+  
+</Link>
 
               {/* Search Bar */}
               <div className="flex-1 max-w-2xl">

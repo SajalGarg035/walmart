@@ -16,6 +16,13 @@ const orderSchema = new mongoose.Schema({
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Product'
     },
+    productData: {
+      name: String,
+      price: Number,
+      images: [String],
+      description: String
+    },
+    externalProductId: String,
     quantity: {
       type: Number,
       required: true,

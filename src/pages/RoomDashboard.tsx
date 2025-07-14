@@ -172,7 +172,7 @@ const RoomDashboard: React.FC = () => {
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">Active Carts</p>
                   <p className="text-2xl font-bold text-gray-900">
-                    {rooms.filter((r: any) => r.sharedCart?.length > 0).length}
+                    {rooms.filter((r: any) => r.sharedCart && Array.isArray(r.sharedCart) && r.sharedCart.length > 0).length}
                   </p>
                 </div>
               </div>
@@ -291,16 +291,20 @@ const RoomDashboard: React.FC = () => {
                         <div className="flex items-center justify-between mb-2">
                           <span className="text-sm font-medium text-blue-900">Shared Cart</span>
                           <span className="text-sm font-bold text-blue-900">
-                            ${room.sharedCart.reduce((total: number, item: any) => 
-                              total + (item.product.price * item.quantity), 0
-                            ).toFixed(2)}
+                            ${room.sharedCart.reduce((total: number, item: any) => {
+                              const price = item.product?.price || item.productData?.price || 0;
+                              const quantity = item.quantity || 0;
+                              return total + (price * quantity);
+                            }, 0).toFixed(2)}
                           </span>
                         </div>
                         <div className="space-y-1">
                           {room.sharedCart.slice(0, 2).map((item: any, idx: number) => (
                             <div key={idx} className="flex justify-between text-xs text-blue-800">
-                              <span className="truncate">{item.product.name}</span>
-                              <span>x{item.quantity}</span>
+                              <span className="truncate">
+                                {item.product?.name || item.productData?.name || 'Unknown Product'}
+                              </span>
+                              <span>x{item.quantity || 0}</span>
                             </div>
                           ))}
                           {room.sharedCart.length > 2 && (
@@ -324,6 +328,14 @@ const RoomDashboard: React.FC = () => {
                         <span>Enter Room</span>
                       </Link>
                       
+                      <Link
+                        to={`/products?roomId=${room._id}`}
+                        className="bg-green-100 text-green-600 px-3 py-2 rounded-lg hover:bg-green-200 transition-colors flex items-center justify-center"
+                        title="Browse Products for this Room"
+                      >
+                        <ShoppingCart className="h-4 w-4" />
+                      </Link>
+
                       {room.creator._id === user._id && (
                         <button
                           onClick={() => deleteRoom(room._id)}

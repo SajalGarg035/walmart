@@ -9,7 +9,8 @@ const roomSchema = new mongoose.Schema({
   code: {
     type: String,
     required: true,
-    unique: true
+    unique: true,
+    uppercase: true
   },
   creator: {
     type: mongoose.Schema.Types.ObjectId,
@@ -19,21 +20,28 @@ const roomSchema = new mongoose.Schema({
   participants: [{
     user: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'User'
+      ref: 'User',
+      required: true
     },
     joinedAt: {
       type: Date,
       default: Date.now
-    },
-    isActive: {
-      type: Boolean,
-      default: true
     }
   }],
   sharedCart: [{
     product: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Product'
+    },
+    externalProductId: {
+      type: String,
+      required: true
+    },
+    productData: {
+      name: String,
+      price: Number,
+      images: [String],
+      description: String
     },
     quantity: {
       type: Number,
@@ -42,7 +50,8 @@ const roomSchema = new mongoose.Schema({
     },
     addedBy: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'User'
+      ref: 'User',
+      required: true
     },
     addedAt: {
       type: Date,
@@ -52,7 +61,8 @@ const roomSchema = new mongoose.Schema({
   chatHistory: [{
     user: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'User'
+      ref: 'User',
+      required: true
     },
     message: {
       type: String,
@@ -61,42 +71,11 @@ const roomSchema = new mongoose.Schema({
     timestamp: {
       type: Date,
       default: Date.now
-    },
-    messageType: {
-      type: String,
-      enum: ['text', 'image', 'file'],
-      default: 'text'
     }
   }],
-  paymentSplit: {
-    method: {
-      type: String,
-      enum: ['equal', 'percentage', 'item-based'],
-      default: 'equal'
-    },
-    splits: [{
-      user: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User'
-      },
-      amount: Number,
-      percentage: Number,
-      items: [{
-        product: {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: 'Product'
-        },
-        quantity: Number
-      }]
-    }]
-  },
   isActive: {
     type: Boolean,
     default: true
-  },
-  expiresAt: {
-    type: Date,
-    default: () => new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours from now
   }
 }, {
   timestamps: true
@@ -104,6 +83,6 @@ const roomSchema = new mongoose.Schema({
 
 roomSchema.index({ code: 1 });
 roomSchema.index({ creator: 1 });
-roomSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+roomSchema.index({ 'participants.user': 1 });
 
 module.exports = mongoose.model('Room', roomSchema);

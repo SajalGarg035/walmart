@@ -206,16 +206,83 @@ const RoomPage: React.FC = () => {
     }
   };
 
+  const addToSharedCart = async (product: any, quantity: number = 1) => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(`http://localhost:3001/api/rooms/${id}/cart`, {
+        productId: product._id || product.id,
+        quantity,
+        action: 'add',
+        productData: {
+          name: product.name,
+          price: product.price,
+          images: product.images || [product.imageUrl],
+          description: product.description
+        }
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      toast.success('Item added to shared cart');
+    } catch (error) {
+      console.error('Error adding to shared cart:', error);
+      toast.error('Failed to add item to shared cart');
+    }
+  };
+
+  const proceedToSplitCheckout = () => {
+    if (!room?.sharedCart || room.sharedCart.length === 0) {
+      toast.error('Cart is empty');
+      return;
+    }
+    navigate(`/checkout/split/${id}`);
+  };
+
+  const proceedToFullCheckout = async () => {
+    if (!room?.sharedCart || room.sharedCart.length === 0) {
+      toast.error('Cart is empty');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.post(`http://localhost:3001/api/rooms/${id}/checkout`, {
+        shippingAddress: {
+          street: '123 Main St',
+          city: 'Anytown',
+          state: 'CA',
+          zipCode: '12345',
+          country: 'United States'
+        },
+        paymentSplits: [{
+          user: user._id,
+          amount: getSharedCartTotal() + (getSharedCartTotal() * 0.08) + (getSharedCartTotal() > 35 ? 0 : 5.99),
+          status: 'pending'
+        }]
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      toast.success('Order created successfully!');
+      navigate('/orders');
+    } catch (error) {
+      console.error('Error creating order:', error);
+      toast.error('Failed to create order');
+    }
+  };
+
   const addToPersonalCart = (item: any) => {
     addToCart(item.product, item.quantity);
     toast.success('Added to your personal cart');
   };
 
   const getSharedCartTotal = () => {
-    if (!room?.sharedCart) return 0;
-    return room.sharedCart.reduce((total: number, item: any) => 
-      total + (item.product.price * item.quantity), 0
-    );
+    if (!room?.sharedCart || !Array.isArray(room.sharedCart)) return 0;
+    return room.sharedCart.reduce((total: number, item: any) => {
+      const price = item.product?.price || item.productData?.price || 0;
+      const quantity = item.quantity || 0;
+      return total + (price * quantity);
+    }, 0);
   };
 
   if (!user) {
@@ -333,7 +400,7 @@ const RoomPage: React.FC = () => {
               </div>
               
               <button
-                onClick={() => navigate('/products')}
+                onClick={() => navigate(`/products?roomId=${id}`)}
                 className="w-full mt-6 bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors font-semibold flex items-center justify-center space-x-2"
               >
                 <Package className="h-4 w-4" />
@@ -375,20 +442,24 @@ const RoomPage: React.FC = () => {
                         className="flex items-center space-x-4 p-4 border border-gray-200 rounded-lg hover:shadow-md transition-shadow"
                       >
                         <img
-                          src={item.product.images?.[0] || item.product.imageUrl}
-                          alt={item.product.name}
+                          src={item.product?.images?.[0] || item.product?.imageUrl || item.productData?.images?.[0] || '/placeholder.jpg'}
+                          alt={item.product?.name || item.productData?.name || 'Product'}
                           className="w-20 h-20 object-cover rounded-lg"
                         />
                         <div className="flex-1">
-                          <h3 className="font-semibold text-gray-900 mb-1">{item.product.name}</h3>
-                          <p className="text-sm text-gray-600 mb-2">${item.product.price.toFixed(2)} each</p>
-                          <p className="text-xs text-gray-500">Added by: {item.addedBy?.username}</p>
+                          <h3 className="font-semibold text-gray-900 mb-1">
+                            {item.product?.name || item.productData?.name || 'Unknown Product'}
+                          </h3>
+                          <p className="text-sm text-gray-600 mb-2">
+                            ${(item.product?.price || item.productData?.price || 0).toFixed(2)} each
+                          </p>
+                          <p className="text-xs text-gray-500">Added by: {item.addedBy?.username || 'Unknown'}</p>
                         </div>
                         
                         <div className="flex items-center space-x-3">
                           <div className="flex items-center space-x-2">
                             <button
-                              onClick={() => updateSharedCartQuantity(item.product._id, item.quantity - 1)}
+                              onClick={() => updateSharedCartQuantity(item.product?._id || item.externalProductId, item.quantity - 1)}
                               className="p-1 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
                             >
                               <Minus className="h-4 w-4" />
@@ -397,7 +468,7 @@ const RoomPage: React.FC = () => {
                               {item.quantity}
                             </span>
                             <button
-                              onClick={() => updateSharedCartQuantity(item.product._id, item.quantity + 1)}
+                              onClick={() => updateSharedCartQuantity(item.product?._id || item.externalProductId, item.quantity + 1)}
                               className="p-1 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
                             >
                               <Plus className="h-4 w-4" />
@@ -406,7 +477,7 @@ const RoomPage: React.FC = () => {
                           
                           <div className="text-right">
                             <p className="font-semibold text-gray-900">
-                              ${(item.product.price * item.quantity).toFixed(2)}
+                              ${((item.product?.price || item.productData?.price || 0) * item.quantity).toFixed(2)}
                             </p>
                           </div>
                           
@@ -418,7 +489,7 @@ const RoomPage: React.FC = () => {
                               Add to My Cart
                             </button>
                             <button
-                              onClick={() => removeFromSharedCart(item.product._id)}
+                              onClick={() => removeFromSharedCart(item.product?._id || item.externalProductId)}
                               className="bg-red-600 text-white px-3 py-1 rounded-md hover:bg-red-700 transition-colors text-sm"
                             >
                               Remove
@@ -429,11 +500,22 @@ const RoomPage: React.FC = () => {
                     ))}
                     
                     <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-                      <div className="flex justify-between items-center">
+                      <div className="flex justify-between items-center mb-4">
                         <span className="text-lg font-semibold text-gray-900">Total: ${getSharedCartTotal().toFixed(2)}</span>
-                        <button className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors font-semibold">
-                          Proceed to Checkout
-                        </button>
+                        <div className="flex space-x-3">
+                          <button 
+                            onClick={proceedToSplitCheckout}
+                            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors font-semibold"
+                          >
+                            Split Payment
+                          </button>
+                          <button 
+                            onClick={proceedToFullCheckout}
+                            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors font-semibold"
+                          >
+                            Full Checkout
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -445,7 +527,7 @@ const RoomPage: React.FC = () => {
                       Start adding products to shop together with your friends
                     </p>
                     <button
-                      onClick={() => navigate('/products')}
+                      onClick={() => navigate(`/products?roomId=${id}`)}
                       className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-semibold"
                     >
                       Browse Products
@@ -503,8 +585,8 @@ const RoomPage: React.FC = () => {
                 <div className="mt-2 space-y-1">
                   {room.sharedCart.slice(0, 2).map((item: any, index: number) => (
                     <div key={index} className="flex items-center justify-between text-xs text-blue-800">
-                      <span>{item.product.name} x{item.quantity}</span>
-                      <span>${(item.product.price * item.quantity).toFixed(2)}</span>
+                      <span>{item.product?.name || item.productData?.name || 'Unknown Product'} x{item.quantity}</span>
+                      <span>${((item.product?.price || item.productData?.price || 0) * item.quantity).toFixed(2)}</span>
                     </div>
                   ))}
                   {room.sharedCart.length > 2 && (

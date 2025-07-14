@@ -38,7 +38,7 @@ const limiter = rateLimit({
 app.use('/api/', limiter);
 
 // Connect to MongoDB
-mongoose.connect(process.env.MONGODB_URI || 'mongodb+srv://CodeTrack:qlvonOtyy8pnqK6n@codetrack.jiuaqby.mongodb.net/', {
+mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/walmart', {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 }).then(() => {
@@ -55,6 +55,17 @@ app.use('/api/products', productRoutes);
 app.use('/api/rooms', roomRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/payments', paymentRoutes);
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Server error:', err);
+  res.status(500).json({ message: 'Internal server error' });
+});
+
+// 404 handler
+app.use('*', (req, res) => {
+  res.status(404).json({ message: 'Route not found' });
+});
 
 // Socket.io connection handling
 const activeRooms = new Map();
@@ -104,19 +115,73 @@ io.on('connection', (socket) => {
   });
 
   socket.on('cart-update', async (data) => {
-    const { roomId, cart, userId } = data;
+    const { roomId, action, productId, quantity, userId, productData } = data;
     try {
-      // Update the room's shared cart in database
       const Room = require('./models/Room');
       const room = await Room.findById(roomId);
+      
       if (room) {
-        room.sharedCart = cart;
+        const existingItemIndex = room.sharedCart.findIndex(item => 
+          item.externalProductId === productId
+        );
+
+        if (action === 'add') {
+          if (existingItemIndex > -1) {
+            room.sharedCart[existingItemIndex].quantity += quantity || 1;
+          } else {
+            room.sharedCart.push({
+              externalProductId: productId,
+              productData: productData || {
+                name: `Product ${productId}`,
+                price: 0,
+                images: []
+              },
+              quantity: quantity || 1,
+              addedBy: userId
+            });
+          }
+        } else if (action === 'remove') {
+          if (existingItemIndex > -1) {
+            room.sharedCart.splice(existingItemIndex, 1);
+          }
+        } else if (action === 'update') {
+          if (existingItemIndex > -1) {
+            if (quantity <= 0) {
+              room.sharedCart.splice(existingItemIndex, 1);
+            } else {
+              room.sharedCart[existingItemIndex].quantity = quantity;
+            }
+          }
+        }
+
         await room.save();
-        await room.populate('sharedCart.product sharedCart.addedBy', 'name price images username');
-        socket.to(roomId).emit('cart-updated', { cart: room.sharedCart, updatedBy: userId });
+        await room.populate('sharedCart.addedBy', 'username firstName lastName');
+        
+        // Transform cart for frontend
+        const transformedCart = room.sharedCart.map(item => ({
+          _id: item._id,
+          product: {
+            _id: item.externalProductId,
+            name: item.productData.name,
+            price: item.productData.price,
+            images: item.productData.images,
+            imageUrl: item.productData.images?.[0]
+          },
+          quantity: item.quantity,
+          addedBy: item.addedBy
+        }));
+        
+        // Broadcast updated cart to all room participants
+        io.to(roomId).emit('cart-updated', { 
+          cart: transformedCart, 
+          updatedBy: userId,
+          action,
+          productId 
+        });
       }
     } catch (error) {
       console.error('Error updating shared cart:', error);
+      socket.emit('cart-update-error', { error: 'Failed to update cart' });
     }
   });
 

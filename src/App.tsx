@@ -20,6 +20,7 @@ import RoomPage from './pages/RoomPage';
 import RoomDashboard from './pages/RoomDashboard';
 import CreateRoomPage from './pages/CreateRoomPage';
 import JoinRoomPage from './pages/JoinRoomPage';
+import SplitCheckoutPage from './pages/SplitCheckoutPage';
 
 import './App.css';
 
@@ -38,6 +39,7 @@ function App() {
                   <Route path="/products/:id" element={<ProductDetailPage />} />
                   <Route path="/cart" element={<CartPage />} />
                   <Route path="/checkout" element={<CheckoutPage />} />
+                  <Route path="/checkout/split/:roomId" element={<SplitCheckoutPage />} />
                   <Route path="/login" element={<LoginPage />} />
                   <Route path="/register" element={<RegisterPage />} />
                   <Route path="/profile" element={<ProfilePage />} />

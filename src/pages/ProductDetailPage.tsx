@@ -12,11 +12,13 @@ import {
   Truck,
   Shield,
   RefreshCw,
-  ZoomIn
+  ZoomIn,
+  Users
 } from 'lucide-react';
 import { getProductById, getProductsByCategory, Product } from '../data/products';
 import { useCart } from '../contexts/CartContext';
 import ProductCard from '../components/ProductCard';
+import axios from 'axios';
 import toast from 'react-hot-toast';
 
 const ProductDetailPage: React.FC = () => {
@@ -64,6 +66,46 @@ const ProductDetailPage: React.FC = () => {
     addToCart(product, quantity, selectedVariants);
   };
 
+  const handleAddToSharedCart = async () => {
+    if (!product) return;
+    
+    // Check if variants are required and selected
+    if (product.variants?.size && !selectedVariants.size) {
+      toast.error('Please select a size');
+      return;
+    }
+    if (product.variants?.color && !selectedVariants.color) {
+      toast.error('Please select a color');
+      return;
+    }
+
+    const currentRoomId = new URLSearchParams(window.location.search).get('roomId');
+    
+    if (currentRoomId) {
+      try {
+        const token = localStorage.getItem('token');
+        await axios.put(`http://localhost:3001/api/rooms/${currentRoomId}/cart`, {
+          productId: product.id,
+          quantity,
+          action: 'add',
+          productData: {
+            name: product.name,
+            price: product.price,
+            images: product.images || [product.imageUrl],
+            description: product.description
+          }
+        }, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        toast.success('Added to shared cart');
+      } catch (error) {
+        console.error('Error adding to shared cart:', error);
+        toast.error('Failed to add to shared cart');
+      }
+    }
+  };
+
   const handleQuantityChange = (change: number) => {
     const newQuantity = quantity + change;
     if (newQuantity >= 1 && newQuantity <= product!.stock) {
@@ -92,6 +134,8 @@ const ProductDetailPage: React.FC = () => {
       </div>
     );
   }
+
+  const isInRoomContext = new URLSearchParams(window.location.search).get('roomId');
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -283,6 +327,18 @@ const ProductDetailPage: React.FC = () => {
                   <ShoppingCart className="h-5 w-5" />
                   <span>Add to Cart</span>
                 </button>
+                
+                {/* Show shared cart button if coming from room */}
+                {isInRoomContext && (
+                  <button
+                    onClick={handleAddToSharedCart}
+                    disabled={product.stock === 0}
+                    className="flex-1 bg-green-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-green-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+                  >
+                    <Users className="h-5 w-5" />
+                    <span>Add to Shared Cart</span>
+                  </button>
+                )}
                 
                 <button className="p-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
                   <Heart className="h-5 w-5 text-gray-600" />

@@ -1,9 +1,11 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ShoppingCart, Star, Heart } from 'lucide-react';
+import { ShoppingCart, Star, Heart, Users } from 'lucide-react';
 import { Product } from '../data/products';
 import { useCart } from '../contexts/CartContext';
+import axios from 'axios';
+import toast from 'react-hot-toast';
 
 interface ProductCardProps {
   product: Product;
@@ -18,6 +20,39 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, className = '' }) =>
     e.stopPropagation();
     addToCart(product);
   };
+
+  const handleAddToSharedCart = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const currentRoomId = new URLSearchParams(window.location.search).get('roomId');
+    
+    if (currentRoomId) {
+      try {
+        const token = localStorage.getItem('token');
+        await axios.put(`http://localhost:3001/api/rooms/${currentRoomId}/cart`, {
+          productId: product.id,
+          quantity: 1,
+          action: 'add',
+          productData: {
+            name: product.name,
+            price: product.price,
+            images: product.images || [product.imageUrl],
+            description: product.description
+          }
+        }, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        toast.success('Added to shared cart');
+      } catch (error) {
+        console.error('Error adding to shared cart:', error);
+        toast.error('Failed to add to shared cart');
+      }
+    }
+  };
+
+  const isInRoomContext = new URLSearchParams(window.location.search).get('roomId');
 
   return (
     <motion.div
@@ -81,14 +116,27 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, className = '' }) =>
             <span className="text-sm text-gray-600">
               {product.stock > 0 ? `${product.stock} in stock` : 'Out of stock'}
             </span>
-            <button
-              onClick={handleAddToCart}
-              disabled={product.stock === 0}
-              className="flex items-center space-x-1 bg-blue-600 text-white px-3 py-1 rounded-md hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
-            >
-              <ShoppingCart className="h-4 w-4" />
-              <span>Add</span>
-            </button>
+            <div className="flex space-x-2">
+              <button
+                onClick={handleAddToCart}
+                disabled={product.stock === 0}
+                className="flex items-center space-x-1 bg-blue-600 text-white px-3 py-1 rounded-md hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+              >
+                <ShoppingCart className="h-4 w-4" />
+                <span>Add</span>
+              </button>
+              
+              {isInRoomContext && (
+                <button
+                  onClick={handleAddToSharedCart}
+                  disabled={product.stock === 0}
+                  className="flex items-center space-x-1 bg-green-600 text-white px-3 py-1 rounded-md hover:bg-green-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  title="Add to Shared Cart"
+                >
+                  <Users className="h-4 w-4" />
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </Link>

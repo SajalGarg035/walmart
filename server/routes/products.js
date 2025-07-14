@@ -121,4 +121,98 @@ router.get('/categories/:category/subcategories', async (req, res) => {
   }
 });
 
+// Get all products (for shared cart)
+router.get('/', async (req, res) => {
+  try {
+    // For demo purposes, return static product data
+    // In a real app, this would query your product database
+    const products = [
+      {
+        id: 'iphone-14-pro',
+        name: 'iPhone 14 Pro',
+        price: 999.99,
+        images: ['https://images.unsplash.com/photo-1592899677977-9c10ca588bbd?w=500'],
+        stock: 10
+      },
+      {
+        id: 'macbook-air-m2',
+        name: 'MacBook Air M2',
+        price: 1199.99,
+        images: ['https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=500'],
+        stock: 5
+      }
+      // Add more products as needed
+    ];
+    
+    res.json(products);
+  } catch (error) {
+    console.error('Get products error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Get product by ID (for shared cart)
+router.get('/:id', async (req, res) => {
+  try {
+    // Mock product data - in real app, query your product database
+    const productData = {
+      'iphone-14-pro': {
+        id: 'iphone-14-pro',
+        name: 'iPhone 14 Pro',
+        price: 999.99,
+        images: ['https://images.unsplash.com/photo-1592899677977-9c10ca588bbd?w=500'],
+        stock: 10
+      },
+      'macbook-air-m2': {
+        id: 'macbook-air-m2',
+        name: 'MacBook Air M2',
+        price: 1199.99,
+        images: ['https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=500'],
+        stock: 5
+      }
+    };
+
+    const product = productData[req.params.id];
+    
+    if (!product) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
+
+    res.json(product);
+  } catch (error) {
+    console.error('Get product error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Create/update product for shared cart
+router.post('/sync', async (req, res) => {
+  try {
+    const { externalId, name, price, images } = req.body;
+    
+    let product = await Product.findOne({ externalId });
+    
+    if (product) {
+      product.name = name;
+      product.price = price;
+      product.images = images;
+      await product.save();
+    } else {
+      product = new Product({
+        externalId,
+        name,
+        price,
+        images,
+        tempData: true
+      });
+      await product.save();
+    }
+    
+    res.json(product);
+  } catch (error) {
+    console.error('Sync product error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 module.exports = router;

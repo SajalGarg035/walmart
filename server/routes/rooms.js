@@ -86,7 +86,7 @@ router.get('/:id', authenticate, async (req, res) => {
   try {
     const room = await Room.findById(req.params.id)
       .populate('creator participants.user', 'username firstName lastName avatar')
-      .populate('sharedCart.product sharedCart.addedBy', 'name price images username')
+      .populate('sharedCart.addedBy', 'username firstName lastName')
       .populate('chatHistory.user', 'username firstName lastName');
 
     if (!room) {
@@ -102,7 +102,27 @@ router.get('/:id', authenticate, async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    res.json(room);
+    // Transform shared cart to ensure consistent structure
+    const transformedRoom = {
+      ...room.toObject(),
+      sharedCart: room.sharedCart.map(item => ({
+        _id: item._id,
+        product: {
+          _id: item.externalProductId,
+          name: item.productData?.name || 'Unknown Product',
+          price: item.productData?.price || 0,
+          images: item.productData?.images || [],
+          imageUrl: item.productData?.images?.[0] || ''
+        },
+        productData: item.productData,
+        externalProductId: item.externalProductId,
+        quantity: item.quantity,
+        addedBy: item.addedBy,
+        addedAt: item.addedAt
+      }))
+    };
+
+    res.json(transformedRoom);
   } catch (error) {
     console.error('Get room error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -112,7 +132,7 @@ router.get('/:id', authenticate, async (req, res) => {
 // Update shared cart
 router.put('/:id/cart', authenticate, async (req, res) => {
   try {
-    const { productId, quantity, action } = req.body;
+    const { productId, quantity, action, productData } = req.body;
     
     const room = await Room.findById(req.params.id);
     
@@ -129,16 +149,21 @@ router.put('/:id/cart', authenticate, async (req, res) => {
     }
 
     const existingItemIndex = room.sharedCart.findIndex(item => 
-      item.product.toString() === productId
+      item.externalProductId === productId
     );
 
     if (action === 'add') {
       if (existingItemIndex > -1) {
-        room.sharedCart[existingItemIndex].quantity += quantity;
+        room.sharedCart[existingItemIndex].quantity += quantity || 1;
       } else {
         room.sharedCart.push({
-          product: productId,
-          quantity,
+          externalProductId: productId,
+          productData: productData || {
+            name: `Product ${productId}`,
+            price: 0,
+            images: []
+          },
+          quantity: quantity || 1,
           addedBy: req.userId
         });
       }
@@ -157,11 +182,90 @@ router.put('/:id/cart', authenticate, async (req, res) => {
     }
 
     await room.save();
-    await room.populate('sharedCart.product sharedCart.addedBy', 'name price images username');
+    await room.populate('sharedCart.addedBy', 'username firstName lastName');
 
-    res.json(room.sharedCart);
+    // Transform cart for frontend
+    const transformedCart = room.sharedCart.map(item => ({
+      _id: item._id,
+      product: {
+        _id: item.externalProductId,
+        name: item.productData.name,
+        price: item.productData.price,
+        images: item.productData.images,
+        imageUrl: item.productData.images?.[0]
+      },
+      quantity: item.quantity,
+      addedBy: item.addedBy
+    }));
+
+    res.json(transformedCart);
   } catch (error) {
     console.error('Update cart error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Create shared order with split payment
+router.post('/:id/checkout', authenticate, async (req, res) => {
+  try {
+    const { shippingAddress, paymentSplits } = req.body;
+    
+    const room = await Room.findById(req.params.id)
+      .populate('sharedCart.addedBy', 'username')
+      .populate('participants.user', 'username email');
+    
+    if (!room) {
+      return res.status(404).json({ message: 'Room not found' });
+    }
+
+    const isParticipant = room.participants.some(p => 
+      p.user._id.toString() === req.userId
+    );
+
+    if (!isParticipant) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    // Calculate totals
+    const subtotal = room.sharedCart.reduce((total, item) => 
+      total + (item.productData.price * item.quantity), 0
+    );
+    const tax = subtotal * 0.08;
+    const shipping = subtotal > 35 ? 0 : 5.99;
+    const total = subtotal + tax + shipping;
+
+    // Create order
+    const Order = require('../models/Order');
+    const { nanoid } = require('nanoid');
+
+    const order = new Order({
+      orderNumber: 'WM' + nanoid(8).toUpperCase(),
+      user: req.userId,
+      items: room.sharedCart.map(item => ({
+        productData: item.productData,
+        externalProductId: item.externalProductId,
+        quantity: item.quantity,
+        price: item.productData.price,
+        total: item.productData.price * item.quantity
+      })),
+      shippingAddress,
+      subtotal,
+      tax,
+      shipping,
+      total,
+      isRoomOrder: true,
+      roomId: room._id,
+      paymentSplits: paymentSplits || [{
+        user: req.userId,
+        amount: total,
+        status: 'pending'
+      }]
+    });
+
+    await order.save();
+    res.status(201).json(order);
+  } catch (error) {
+    console.error('Create shared order error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });
@@ -175,10 +279,28 @@ router.get('/user/my-rooms', authenticate, async (req, res) => {
     })
     .populate('creator', 'username firstName lastName')
     .populate('participants.user', 'username firstName lastName')
-    .populate('sharedCart.product', 'name price')
+    .populate('sharedCart.addedBy', 'username firstName lastName')
     .sort({ updatedAt: -1 });
 
-    res.json(rooms);
+    // Transform rooms to ensure consistent cart structure
+    const transformedRooms = rooms.map(room => ({
+      ...room.toObject(),
+      sharedCart: room.sharedCart.map(item => ({
+        _id: item._id,
+        product: {
+          _id: item.externalProductId,
+          name: item.productData?.name || 'Unknown Product',
+          price: item.productData?.price || 0,
+          images: item.productData?.images || [],
+          imageUrl: item.productData?.images?.[0] || ''
+        },
+        productData: item.productData,
+        quantity: item.quantity,
+        addedBy: item.addedBy
+      }))
+    }));
+
+    res.json(transformedRooms);
   } catch (error) {
     console.error('Get user rooms error:', error);
     res.status(500).json({ message: 'Server error' });
