@@ -21,7 +21,14 @@ const JoinRoomPage: React.FC = () => {
 
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      
+      if (!token) {
+        toast.error('Please log in to join a room');
+        navigate('/login');
+        return;
+      }
+
       const response = await axios.post('http://localhost:3001/api/rooms/join', {
         code: roomCode.trim().toUpperCase()
       }, {
@@ -34,6 +41,9 @@ const JoinRoomPage: React.FC = () => {
       console.error('Error joining room:', error);
       if (error.response?.status === 404) {
         toast.error('Room not found. Please check the code and try again.');
+      } else if (error.response?.status === 401) {
+        toast.error('Please log in to join a room');
+        navigate('/login');
       } else {
         toast.error('Failed to join room');
       }
